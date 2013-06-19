@@ -101,7 +101,7 @@ def changeRelease(release, changed_by, transaction, existsCallback, commitCallba
                 old_data_version = releaseInfo['data_version']
         except IndexError:
             # If the release doesn't already exist, create it, and set old_data_version appropriately.
-            releaseInfo = createRelease(rel, product, version, changed_by, transaction, dict(name=rel))
+            releaseInfo = createRelease(rel, product, version, changed_by, transaction, dict(name=rel, hashFunction=hashFunction))
             old_data_version = 1
 
         # If the version doesn't match, just update it. This will be the case for nightlies
@@ -112,8 +112,11 @@ def changeRelease(release, changed_by, transaction, existsCallback, commitCallba
                 changed_by=changed_by, old_data_version=old_data_version,
                 transaction=transaction)
             old_data_version += 1
+        # If we don't have our alias stored already add it. This will happen
+        # once for every new blob (eg dated blobs for nightlies, releases)
+        # XXX don't have platfrom from request here check alias existence
 
-        commitCallback(rel, product, version, hashFunction, alias, incomingData, releaseInfo['data'], old_data_version)
+        commitCallback(rel, product, version, alias, incomingData, releaseInfo['data'], old_data_version)
 
     new_data_version = db.releases.getReleases(name=release, transaction=transaction)[0]['data_version']
     if new:
@@ -151,10 +154,9 @@ class SingleLocaleView(AdminView):
                     locale=locale, transaction=transaction)
             return False
 
-        def commit(rel, product, version, hashFunction, alias, localeData, releaseData, old_data_version):
+        def commit(rel, product, version, alias, localeData, releaseData, old_data_version):
             return db.releases.addLocaleToRelease(name=rel, platform=platform,
-                locale=locale, hashFunction=hashFunction, data=localeData,
-                alias=alias, old_data_version=old_data_version,
+                locale=locale, data=localeData, alias=alias, old_data_version=old_data_version,
                 changed_by=changed_by, transaction=transaction)
 
         return changeRelease(release, changed_by, transaction, exists, commit, self.log)
