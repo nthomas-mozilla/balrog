@@ -69,8 +69,10 @@ def changeRelease(release, changed_by, transaction, existsCallback, commitCallba
         return Response(status=400, response=form.errors)
     product = form.product.data
     version = form.version.data
+    hashFunction = form.hashFunction.data
     incomingData = form.data.data
     copyTo = form.copyTo.data
+    alias = form.alias.data
     old_data_version = form.data_version.data
 
     allReleases = [release]
@@ -91,6 +93,8 @@ def changeRelease(release, changed_by, transaction, existsCallback, commitCallba
                 # If the product we're given doesn't match the one in the DB, panic.
                 if product != releaseInfo['product']:
                     return Response(status=400, response="Product name '%s' doesn't match the one on the release object ('%s') for release '%s'" % (product, releaseInfo['product'], rel))
+                if hashFunction != releaseInfo['data']['hashFunction']:
+                    return Response(status=400, response="hashFunction '%s' doesn't match the one on the release object ('%s') for release '%s'" % (hashFunction, releaseInfo['data']['hashFunction'], rel))
             # If this isn't the release in the URL...
             else:
                 # Use the data_version we just grabbed from the db.
@@ -109,7 +113,7 @@ def changeRelease(release, changed_by, transaction, existsCallback, commitCallba
                 transaction=transaction)
             old_data_version += 1
 
-        commitCallback(rel, product, version, incomingData, releaseInfo['data'], old_data_version)
+        commitCallback(rel, product, version, hashFunction, alias, incomingData, releaseInfo['data'], old_data_version)
 
     new_data_version = db.releases.getReleases(name=release, transaction=transaction)[0]['data_version']
     if new:
@@ -147,9 +151,10 @@ class SingleLocaleView(AdminView):
                     locale=locale, transaction=transaction)
             return False
 
-        def commit(rel, product, version, localeData, releaseData, old_data_version):
+        def commit(rel, product, version, hashFunction, alias, localeData, releaseData, old_data_version):
             return db.releases.addLocaleToRelease(name=rel, platform=platform,
-                locale=locale, data=localeData, old_data_version=old_data_version,
+                locale=locale, hashFunction=hashFunction, data=localeData,
+                alias=alias, old_data_version=old_data_version,
                 changed_by=changed_by, transaction=transaction)
 
         return changeRelease(release, changed_by, transaction, exists, commit, self.log)
