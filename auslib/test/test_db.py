@@ -888,7 +888,7 @@ class TestReleasesSchema1(unittest.TestCase, MemoryDatabaseMixin):
                 },
                 "l": {
                     "complete": {
-                        "filesize": 1234
+                        "filesize": "1234"
                     }
                 }
             }
