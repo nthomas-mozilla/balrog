@@ -115,9 +115,6 @@ def changeRelease(release, changed_by, transaction, existsCallback, commitCallba
                 changed_by=changed_by, old_data_version=old_data_version,
                 transaction=transaction)
             old_data_version += 1
-        # If we don't have our alias stored already add it. This will happen
-        # once for every new blob (eg dated blobs for nightlies, releases)
-        # XXX don't have platfrom from request here check alias existence
 
         extraArgs = {}
         if alias:

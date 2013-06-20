@@ -830,6 +830,7 @@ class Releases(AUSTable):
             releaseBlob['platforms'][platform] = dict(locales=dict())
         releaseBlob['platforms'][platform]['locales'][locale] = data
 
+        # we don't allow modification of existing platforms (aliased or not)
         if alias:
             for a in alias:
                 if a not in releaseBlob['platforms']:
