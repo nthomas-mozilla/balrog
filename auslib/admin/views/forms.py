@@ -92,7 +92,7 @@ class ReleaseForm(Form):
     data_version = IntegerField('data_version', widget=HiddenInput())
     product = TextField('Product', validators=[Required()])
     version = TextField('Version', validators=[Required()])
-    hashFunction = TextField('Hash Function', validators=[Required()])
+    hashFunction = TextField('Hash Function')
     data = JSONTextField('Data', validators=[Required()])
     copyTo = JSONTextField('Copy To', default=list)
     alias = JSONTextField('Alias', default=list)

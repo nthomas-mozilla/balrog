@@ -101,6 +101,33 @@ class TestReleasesAPI_JSON(ViewTest, JSONTestMixin):
 }
 """))
 
+    def testLocalePutForNewReleaseWithAlias(self):
+        data = json.dumps(dict(complete=dict(filesize=678)))
+        ret = self._put('/releases/e/builds/p/a', data=dict(data=data, product='e', version='e', alias='["p2"]'))
+        self.assertStatusCode(ret, 201)
+        self.assertEqual(ret.data, json.dumps(dict(new_data_version=2)), "Data: %s" % ret.data)
+        ret = select([db.releases.data]).where(db.releases.name=='e').execute().fetchone()[0]
+        self.assertEqual(json.loads(ret), json.loads("""
+{
+    "name": "e",
+    "schema_version": 1,
+    "platforms": {
+        "p2": {
+            "alias": "p"
+            },
+        "p": {
+            "locales": {
+                "a": {
+                    "complete": {
+                        "filesize": 678
+                    }
+                }
+            }
+        }
+    }
+}
+"""))
+
     def testLocalePutAppend(self):
         data = json.dumps(dict(partial=dict(fileUrl='abc')))
         ret = self._put('/releases/d/builds/p/g', data=dict(data=data, product='d', version='d', data_version=1))

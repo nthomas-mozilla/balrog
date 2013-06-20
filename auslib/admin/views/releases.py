@@ -93,7 +93,7 @@ def changeRelease(release, changed_by, transaction, existsCallback, commitCallba
                 # If the product we're given doesn't match the one in the DB, panic.
                 if product != releaseInfo['product']:
                     return Response(status=400, response="Product name '%s' doesn't match the one on the release object ('%s') for release '%s'" % (product, releaseInfo['product'], rel))
-                if hashFunction != releaseInfo['data']['hashFunction']:
+                if 'hashFunction' in releaseInfo['data'] and hashFunction != releaseInfo['data']['hashFunction']:
                     return Response(status=400, response="hashFunction '%s' doesn't match the one on the release object ('%s') for release '%s'" % (hashFunction, releaseInfo['data']['hashFunction'], rel))
             # If this isn't the release in the URL...
             else:
@@ -101,7 +101,10 @@ def changeRelease(release, changed_by, transaction, existsCallback, commitCallba
                 old_data_version = releaseInfo['data_version']
         except IndexError:
             # If the release doesn't already exist, create it, and set old_data_version appropriately.
-            releaseInfo = createRelease(rel, product, version, changed_by, transaction, dict(name=rel, hashFunction=hashFunction))
+            newReleaseData = dict(name=rel)
+            if hashFunction:
+                newReleaseData['hashFunction'] = hashFunction
+            releaseInfo = createRelease(rel, product, version, changed_by, transaction, newReleaseData)
             old_data_version = 1
 
         # If the version doesn't match, just update it. This will be the case for nightlies
@@ -116,7 +119,10 @@ def changeRelease(release, changed_by, transaction, existsCallback, commitCallba
         # once for every new blob (eg dated blobs for nightlies, releases)
         # XXX don't have platfrom from request here check alias existence
 
-        commitCallback(rel, product, version, alias, incomingData, releaseInfo['data'], old_data_version)
+        extraArgs = {}
+        if alias:
+            extraArgs['alias'] = alias
+        commitCallback(rel, product, version, incomingData, releaseInfo['data'], old_data_version, extraArgs)
 
     new_data_version = db.releases.getReleases(name=release, transaction=transaction)[0]['data_version']
     if new:
@@ -154,9 +160,9 @@ class SingleLocaleView(AdminView):
                     locale=locale, transaction=transaction)
             return False
 
-        def commit(rel, product, version, alias, localeData, releaseData, old_data_version):
+        def commit(rel, product, version, localeData, releaseData, old_data_version, extraArgs):
             return db.releases.addLocaleToRelease(name=rel, platform=platform,
-                locale=locale, data=localeData, alias=alias, old_data_version=old_data_version,
+                locale=locale, data=localeData, alias=extraArgs.get('alias'), old_data_version=old_data_version,
                 changed_by=changed_by, transaction=transaction)
 
         return changeRelease(release, changed_by, transaction, exists, commit, self.log)
@@ -204,7 +210,7 @@ class SingleReleaseView(AdminView):
                 return True
             return False
 
-        def commit(rel, product, version, newReleaseData, releaseData, old_data_version):
+        def commit(rel, product, version, newReleaseData, releaseData, old_data_version, extraArgs):
             releaseData.update(newReleaseData)
             return db.releases.updateRelease(name=rel, blob=releaseData,
                 changed_by=changed_by, old_data_version=old_data_version,
