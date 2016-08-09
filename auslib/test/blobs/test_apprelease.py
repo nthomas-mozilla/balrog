@@ -118,28 +118,31 @@ class TestReleaseBlobV1(unittest.TestCase):
 
     def testAllowedDomain(self):
         blob = ReleaseBlobV1(fileUrls=dict(c="http://a.com/a"))
-        self.assertFalse(dbo.releases.containsForbiddenDomain(blob, "a"))
+        self.assertFalse(blob.containsForbiddenDomain("a"))
 
     def testForbiddenDomainFileUrls(self):
         blob = ReleaseBlobV1(fileUrls=dict(c="http://evil.com/a"))
-        self.assertTrue(dbo.releases.containsForbiddenDomain(blob, "a"))
+        self.assertTrue(blob.containsForbiddenDomain("a"))
 
     def testForbiddenDomainInLocale(self):
         blob = ReleaseBlobV1(platforms=dict(f=dict(locales=dict(h=dict(partial=dict(fileUrl="http://evil.com/a"))))))
-        self.assertTrue(dbo.releases.containsForbiddenDomain(blob, "a"))
+        self.assertTrue(blob.containsForbiddenDomain("a"))
 
     def testForbiddenDomainAndAllowedDomain(self):
         updates = OrderedDict()
         updates["partial"] = dict(fileUrl="http://a.com/a")
         updates["complete"] = dict(fileUrl="http://evil.com/a")
         blob = ReleaseBlobV1(platforms=dict(f=dict(locales=dict(j=updates))))
-        self.assertTrue(dbo.releases.containsForbiddenDomain(blob, "a"))
+        self.assertTrue(blob.containsForbiddenDomain("a"))
 
 
 class TestOldVersionSpecialCases(unittest.TestCase):
     def setUp(self):
         self.specialForceHosts = ["http://a.com"]
         self.whitelistedDomains = {'boring.com': ('h',)}
+        dbo.setDb('sqlite:///:memory:')
+        dbo.create()
+        dbo.setDomainWhitelist(self.whitelistedDomains)
         self.blob = ReleaseBlobV1()
         self.blob.loadJSON("""
     {
@@ -169,7 +172,7 @@ class TestOldVersionSpecialCases(unittest.TestCase):
 
     def testIsValid(self):
         # Raises on error
-        self.blob.validate()
+        self.blob.validate("h")
 
     def test2_0(self):
         updateQuery = {
@@ -559,8 +562,8 @@ class TestSchema2Blob(unittest.TestCase):
 
     def testIsValid(self):
         # Raises on error
-        self.blobJ2.validate()
-        self.blobK.validate()
+        self.blobJ2.validate("j")
+        self.blobK.validate("k")
 
     def testSchema2CompleteOnly(self):
         updateQuery = {
@@ -662,11 +665,11 @@ class TestSchema2Blob(unittest.TestCase):
 
     def testAllowedDomain(self):
         blob = ReleaseBlobV2(fileUrls=dict(c="http://a.com/a"))
-        self.assertFalse(dbo.releases.containsForbiddenDomain(blob, 'j'))
+        self.assertFalse(blob.containsForbiddenDomain('j'))
 
     def testForbiddenDomainFileUrls(self):
         blob = ReleaseBlobV2(fileUrls=dict(c="http://evil.com/a"))
-        self.assertTrue(dbo.releases.containsForbiddenDomain(blob, 'j'))
+        self.assertTrue(blob.containsForbiddenDomain('j'))
 
 
 class TestSchema2BlobNightlyStyle(unittest.TestCase):
@@ -728,7 +731,7 @@ class TestSchema2BlobNightlyStyle(unittest.TestCase):
 
     def testIsValid(self):
         # Raises on error
-        self.blobJ2.validate()
+        self.blobJ2.validate("j")
 
     def testCompleteOnly(self):
         updateQuery = {
@@ -780,14 +783,14 @@ class TestSchema2BlobNightlyStyle(unittest.TestCase):
 
     def testForbiddenDomainInLocale(self):
         blob = ReleaseBlobV2(platforms=dict(f=dict(locales=dict(h=dict(partial=dict(fileUrl="http://evil.com/a"))))))
-        self.assertTrue(dbo.releases.containsForbiddenDomain(blob, 'a'))
+        self.assertTrue(blob.containsForbiddenDomain('a'))
 
     def testForbiddenDomainAndAllowedDomain(self):
         updates = OrderedDict()
         updates["partial"] = dict(fileUrl="http://a.com/a")
         updates["complete"] = dict(fileUrl="http://evil.com/a")
         blob = ReleaseBlobV2(platforms=dict(f=dict(locales=dict(j=updates))))
-        self.assertTrue(dbo.releases.containsForbiddenDomain(blob, 'a'))
+        self.assertTrue(blob.containsForbiddenDomain('a'))
 
 
 class TestSchema3Blob(unittest.TestCase):
@@ -957,8 +960,8 @@ class TestSchema3Blob(unittest.TestCase):
 
     def testIsValid(self):
         # Raises on error
-        self.blobF3.validate()
-        self.blobG2.validate()
+        self.blobF3.validate("f")
+        self.blobG2.validate("g")
 
     def testSchema3MultipleUpdates(self):
         updateQuery = {
@@ -1107,20 +1110,20 @@ class TestSchema3Blob(unittest.TestCase):
 
     def testAllowedDomain(self):
         blob = ReleaseBlobV3(fileUrls=dict(c="http://a.com/a"))
-        self.assertFalse(dbo.releases.containsForbiddenDomain(blob, 'f'))
+        self.assertFalse(blob.containsForbiddenDomain('f'))
 
     def testForbiddenDomainFileUrls(self):
         blob = ReleaseBlobV3(fileUrls=dict(c="http://evil.com/a"))
-        self.assertTrue(dbo.releases.containsForbiddenDomain(blob, 'f'))
+        self.assertTrue(blob.containsForbiddenDomain('f'))
 
     def testForbiddenDomainInLocale(self):
         blob = ReleaseBlobV3(platforms=dict(f=dict(locales=dict(h=dict(partials=[dict(fileUrl="http://evil.com/a")])))))
-        self.assertTrue(dbo.releases.containsForbiddenDomain(blob, 'f'))
+        self.assertTrue(blob.containsForbiddenDomain('f'))
 
     def testForbiddenDomainAndAllowedDomain(self):
         updates = dict(partials=[dict(fileUrl="http://a.com/a"), dict(fileUrl="http://evil.com/a")])
         blob = ReleaseBlobV3(platforms=dict(f=dict(locales=dict(j=updates))))
-        self.assertTrue(dbo.releases.containsForbiddenDomain(blob, 'f'))
+        self.assertTrue(blob.containsForbiddenDomain('f'))
 
 
 class TestSchema4Blob(unittest.TestCase):
@@ -1210,7 +1213,7 @@ class TestSchema4Blob(unittest.TestCase):
 
     def testIsValid(self):
         # Raises on error
-        self.blobH2.validate()
+        self.blobH2.validate("h")
 
     def testSchema4WithPartials(self):
         updateQuery = {
@@ -1384,7 +1387,7 @@ class TestSchema4Blob(unittest.TestCase):
 
         v4Blob = ReleaseBlobV4.fromV3(v3Blob)
         # Raises on error
-        v4Blob.validate()
+        v4Blob.validate("h")
 
         expected = {
             "name": "g2",
@@ -1451,7 +1454,7 @@ class TestSchema4Blob(unittest.TestCase):
 
         v4Blob = ReleaseBlobV4.fromV3(v3Blob)
         # Raises on error
-        v4Blob.validate()
+        v4Blob.validate("h")
 
         expected = v3Blob.copy()
         expected["schema_version"] = 4
@@ -1460,24 +1463,24 @@ class TestSchema4Blob(unittest.TestCase):
 
     def testAllowedDomain(self):
         blob = ReleaseBlobV4(fileUrls=dict(c=dict(completes=dict(foo="http://a.com/c"))))
-        self.assertFalse(dbo.releases.containsForbiddenDomain(blob, 'h'))
+        self.assertFalse(blob.containsForbiddenDomain('h'))
 
     def testAllowedDomainWrongProduct(self):
         blob = ReleaseBlobV4(fileUrls=dict(c=dict(completes=dict(foo="http://a.com/c"))))
-        self.assertTrue(dbo.releases.containsForbiddenDomain(blob, 'hhh'))
+        self.assertTrue(blob.containsForbiddenDomain('hhh'))
 
     def testForbiddenDomainFileUrls(self):
         blob = ReleaseBlobV4(fileUrls=dict(c=dict(completes=dict(foo="http://evil.com/c"))))
-        self.assertTrue(dbo.releases.containsForbiddenDomain(blob, 'h'))
+        self.assertTrue(blob.containsForbiddenDomain('h'))
 
     def testForbiddenDomainInLocale(self):
         blob = ReleaseBlobV4(platforms=dict(f=dict(locales=dict(h=dict(partials=[dict(fileUrl="http://evil.com/a")])))))
-        self.assertTrue(dbo.releases.containsForbiddenDomain(blob, 'h'))
+        self.assertTrue(blob.containsForbiddenDomain('h'))
 
     def testForbiddenDomainAndAllowedDomain(self):
         updates = dict(partials=[dict(fileUrl="http://a.com/a"), dict(fileUrl="http://evil.com/a")])
         blob = ReleaseBlobV3(platforms=dict(f=dict(locales=dict(j=updates))))
-        self.assertTrue(dbo.releases.containsForbiddenDomain(blob, 'h'))
+        self.assertTrue(blob.containsForbiddenDomain('h'))
 
 
 class TestSchema5Blob(unittest.TestCase):
@@ -1569,7 +1572,7 @@ class TestSchema5Blob(unittest.TestCase):
 
     def testIsValid(self):
         # Raises on error
-        self.blobH2.validate()
+        self.blobH2.validate("h")
 
     def testSchema5OptionalAttributes(self):
         updateQuery = {

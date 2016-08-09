@@ -60,3 +60,6 @@ class GMPBlobV1(Blob):
                               platformData["filesize"], vendorInfo["version"]))
 
         return vendorXML
+
+    def containsForbiddenDomain(self, product):
+        return False

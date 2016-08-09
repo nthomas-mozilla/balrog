@@ -87,3 +87,6 @@ class SystemAddonsBlob(Blob):
             return '    </addons>'
         else:
             return None
+
+    def containsForbiddenDomain(self, product):
+        return False

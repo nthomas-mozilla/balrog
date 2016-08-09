@@ -67,8 +67,10 @@ class Blob(dict):
         logger_name = "{0}.{1}".format(self.__class__.__module__, self.__class__.__name__)
         self.__class__.log = logging.getLogger(logger_name)
 
-    def validate(self):
-        """Raises a BlobValidationError if the blob is invalid."""
+    def validate(self, product=None):
+        """Checks the blob against its schema, raising a BlobValidationError if invalid.
+        If product is set, also checks the blob against the whitelisted domains, raising
+        ValueError if any invalid domains are used."""
         self.log.debug('Validating blob %s' % self)
         validator = jsonschema.Draft4Validator(self.getSchema())
         # Normal usage is to use .validate(), but errors raised by it return
@@ -79,6 +81,10 @@ class Blob(dict):
         errors = [e.message for e in validator.iter_errors(self)]
         if errors:
             raise BlobValidationError("Invalid blob! See 'errors' for details.", errors)
+
+        # check the domains used in the blob are all permitted
+        if product and self.containsForbiddenDomain(product):
+            raise ValueError("Release blob contains forbidden domain.")
 
     def getResponseProducts(self):
         # Usually returns None. If the Blob is a SuperBlob, it returns the list

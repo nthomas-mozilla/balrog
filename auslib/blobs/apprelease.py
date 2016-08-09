@@ -169,6 +169,38 @@ class ReleaseBlobBase(Blob):
 
         return True
 
+    def containsForbiddenDomain(self, product):
+        """Returns True if the blob contains any file URLs that contain a
+           domain that we're not allowed to serve updates to."""
+        whitelist = dbo.db.releasesTable.domainWhitelist
+        # Check the top level URLs, if the exist.
+        for c in self.get('fileUrls', {}).values():
+            # New-style
+            if isinstance(c, dict):
+                for from_ in c.values():
+                    for url in from_.values():
+                        if isForbiddenUrl(url, product, whitelist):
+                            return True
+            # Old-style
+            else:
+                if isForbiddenUrl(c, product, whitelist):
+                    return True
+
+        # And also the locale-level URLs.
+        for platform in self.get('platforms', {}).values():
+            for locale in platform.get('locales', {}).values():
+                for type_ in ('partial', 'complete'):
+                    if type_ in locale and 'fileUrl' in locale[type_]:
+                        if isForbiddenUrl(locale[type_]['fileUrl'], product, whitelist):
+                            return True
+                for type_ in ('partials', 'completes'):
+                    for update in locale.get(type_, {}):
+                        if 'fileUrl' in update:
+                            if isForbiddenUrl(update["fileUrl"], product, whitelist):
+                                return True
+
+        return False
+
 
 class SeparatedFileUrlsMixin(object):
 
