@@ -1,5 +1,6 @@
 import unittest
 
+from auslib.global_state import dbo
 from auslib.blobs.gmp import GMPBlobV1
 from auslib.errors import BadDataError
 
@@ -10,6 +11,9 @@ class TestSchema1Blob(unittest.TestCase):
     def setUp(self):
         self.specialForceHosts = ["http://a.com"]
         self.whitelistedDomains = {"a.com": ('gg',), 'boring.com': ('gg',)}
+        dbo.setDb('sqlite:///:memory:')
+        dbo.create()
+        dbo.setDomainWhitelist(self.whitelistedDomains)
         self.blob = GMPBlobV1()
         self.blob.loadJSON("""
 {
@@ -43,11 +47,6 @@ class TestSchema1Blob(unittest.TestCase):
                     "hashValue": "11",
                     "fileUrl": "http://boring.com/foo"
                 },
-                "r": {
-                    "filesize": 666,
-                    "hashValue": "666",
-                    "fileUrl": "http://evil.com/fire"
-                },
                 "default": {
                     "filesize": 20,
                     "hashValue": "50",
@@ -58,6 +57,13 @@ class TestSchema1Blob(unittest.TestCase):
     }
 }
 """)
+        self.blobG2 = GMPBlobV1()
+        self.blobG2.loadJSON(self.blob.getJSON())
+        self.blobG2["vendors"]["d"]["platforms"]["r"] = {
+            "filesize": 666,
+            "hashValue": "666",
+            "fileUrl": "http://evil.com/fire"
+        }
 
     def testGetVendorsForPlatform(self):
         vendors = set([v for v in self.blob.getVendorsForPlatform("q")])
@@ -82,7 +88,7 @@ class TestSchema1Blob(unittest.TestCase):
         self.assertEquals("default", self.blob.getResolvedPlatform("d", "q2"))
 
     def testGetResolvedPlatformSpecificOverridesDefault(self):
-        self.assertEquals("r", self.blob.getResolvedPlatform("d", "r"))
+        self.assertEquals("q", self.blob.getResolvedPlatform("d", "q"))
 
     def testGetResolvedPlatformRaisesBadDataError(self):
         self.assertRaises(BadDataError, self.blob.getResolvedPlatform, "c", "bbb")
@@ -195,14 +201,19 @@ class TestSchema1Blob(unittest.TestCase):
             "osVersion": "a", "distribution": "a", "distVersion": "a",
             "force": 0
         }
-        returned_header = self.blob.getHeaderXML(updateQuery, "minor", self.whitelistedDomains, self.specialForceHosts)
-        returned = self.blob.getInnerXML(updateQuery, "minor", self.whitelistedDomains, self.specialForceHosts)
-        returned_footer = self.blob.getFooterXML(updateQuery, "minor", self.whitelistedDomains, self.specialForceHosts)
+        returned_header = self.blobG2.getHeaderXML(updateQuery, "minor", self.whitelistedDomains, self.specialForceHosts)
+        returned = self.blobG2.getInnerXML(updateQuery, "minor", self.whitelistedDomains, self.specialForceHosts)
+        returned_footer = self.blobG2.getFooterXML(updateQuery, "minor", self.whitelistedDomains, self.specialForceHosts)
         returned = [x.strip() for x in returned]
         expected_header = "<addons>"
         expected = []
-        expected = [x.strip() for x in expected]
         expected_footer = "</addons>"
         self.assertEqual(returned_header.strip(), expected_header.strip())
         self.assertItemsEqual(returned, expected)
         self.assertEqual(returned_footer.strip(), expected_footer.strip())
+
+    def testIsValid(self):
+        self.blob.validate("gg")
+
+    def testIsValidForbiddenDomain(self):
+        self.assertRaises(ValueError, self.blobG2.validate, "gg")

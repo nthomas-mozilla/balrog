@@ -1,3 +1,4 @@
+from auslib.global_state import dbo
 from auslib.AUS import isForbiddenUrl
 from auslib.blobs.base import Blob
 from auslib.errors import BadDataError
@@ -62,4 +63,14 @@ class GMPBlobV1(Blob):
         return vendorXML
 
     def containsForbiddenDomain(self, product):
+        """Returns True if the blob contains any file URLs that contain a
+           domain that we're not allowed to serve updates to."""
+        whitelist = dbo.db.releasesTable.domainWhitelist
+        self.log.debug('Whitelist: %s', whitelist)
+        for vendor in self.get('vendors', {}).values():
+            for platform in vendor.get('platforms', {}).values():
+                if 'fileUrl' in platform:
+                    self.log.debug('fileUrl: %s', platform['fileUrl'])
+                    if isForbiddenUrl(platform["fileUrl"], product, whitelist):
+                        return True
         return False
