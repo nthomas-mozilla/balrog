@@ -29,12 +29,12 @@ angular.module('app').directive("permissionOptions", [function(){
             $scope.actions = {
                 "admin": [],
                 "emergency_shutoff": ["create", "delete"],
-                "rule": ["create", "modify", "delete"],
-                "release": ["create", "modify", "delete"],
+                "rule": ["create", "modify", "delete", "signoff"],
+                "release": ["create", "modify", "delete", "signoff"],
                 "release_read_only": ["set", "unset"],
                 "release_locale": ["modify"],
-                "required_signoff": ["create", "modify", "delete"],
-                "permission": ["create", "modify", "delete"],
+                "required_signoff": ["create", "modify", "delete", "signoff"],
+                "permission": ["create", "modify", "delete", "signoff"],
                 "scheduled_change": ["enact"],
                 "":[]
             };

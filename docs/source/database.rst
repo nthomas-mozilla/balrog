@@ -235,9 +235,9 @@ While there's no enforced format on release names, there are a few conventions t
 Permissions
 -----------
 
-The permissions table is a simple list of usernames and the ACLs(Access Control Lists) that they have.
+The permissions table is a simple list of usernames and the ACLs (Access Control Lists) that they have.
 A user could be an "admin", giving them write access to everything, or could have one or more specific permissions.
-These specific ACLs let us do things such as give B2G folks access to Balrog without the risk of them or their tools accidentally messing up Firefox updates.
+These specific ACLs let us do things such as give Thunderbird folks access to Balrog without the risk of them or their tools accidentally messing up Firefox updates.
 
 The table below describe all possible permissions:
 
@@ -254,12 +254,16 @@ The table below describe all possible permissions:
   |                        | modify              | object and action if the changes  |                               |
   |                        +---------------------+ they are making only affect the   |                               |
   |                        | delete              | product specified.                |                               |
+  |                        +---------------------+                                   |                               |
+  |                        | signoff             |                                   |                               |
   +------------------------+---------------------+                                   |                               |
   | release                | create              |                                   |                               |
   |                        +---------------------+                                   |                               |
   |                        | modify              |                                   |                               |
   |                        +---------------------+                                   |                               |
   |                        | delete              |                                   |                               |
+  |                        +---------------------+                                   |                               |
+  |                        | signoff             |                                   |                               |
   +------------------------+---------------------+                                   |                               |
   | release_read_only      | set                 |                                   |                               |
   |                        +---------------------+                                   |                               |
@@ -272,17 +276,20 @@ The table below describe all possible permissions:
   |                        | modify              |                                   |                               |
   |                        +---------------------+                                   |                               |
   |                        | delete              |                                   |                               |
+  |                        +---------------------+                                   |                               |
+  |                        | signoff             |                                   |                               |
   +------------------------+---------------------+-----------------------------------+                               |
   | permission             | create              | No supported options.             |                               |
   |                        +---------------------+                                   |                               |
   |                        | modify              |                                   |                               |
   |                        +---------------------+                                   |                               |
   |                        | delete              |                                   |                               |
+  |                        +---------------------+                                   |                               |
+  |                        | signoff             |                                   |                               |
   +------------------------+---------------------+-----------------------------------+-------------------------------+
   | scheduled_change       | enact               | No supported options.             | Only the Balrog Agent should  |
   |                        |                     |                                   | be granted this permission.   |
   +------------------------+---------------------+-----------------------------------+-------------------------------+
-
 
 ----------
 User Roles

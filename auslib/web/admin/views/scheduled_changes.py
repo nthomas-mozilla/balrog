@@ -145,7 +145,7 @@ class SignoffsView(AdminView):
     @requirelogin
     def _post(self, sc_id, transaction, changed_by):
         what = {"role": connexion.request.get_json().get("role")}
-        self.signoffs_table.insert(changed_by, transaction, sc_id=sc_id, **what)
+        self.signoffs_table.insert(changed_by, transaction=transaction, sc_id=sc_id, **what)
         return jsonify({})
 
     @requirelogin

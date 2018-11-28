@@ -20,12 +20,13 @@ import pytest
 
 import migrate.versioning.api
 
+from parameterized import parameterized
+
 from auslib.global_state import cache, dbo
 from auslib.db import AUSDatabase, AUSTable, AlreadySetupError, \
     AUSTransaction, TransactionError, OutdatedDataError, UpdateMergeError, \
     ReadOnlyError, PermissionDeniedError, ChangeScheduledError, \
-    MismatchedDataVersionError, SignoffsTable, SignoffRequiredError, \
-    verify_signoffs
+    MismatchedDataVersionError, SignoffRequiredError, verify_signoffs
 from auslib.blobs.base import BlobValidationError, createBlob
 from auslib.blobs.apprelease import ReleaseBlobV1
 from migrate.versioning.api import version
@@ -737,6 +738,8 @@ class ScheduledChangesTableMixin(object):
                                    Column("fooid", Integer, primary_key=True, autoincrement=True),
                                    Column("foo", String(15), nullable=False),
                                    Column("bar", String(15)))
+                self.permissionName = "test"
+                self.productField = "base_foo"
                 super(TestTable, self).__init__(db, "sqlite", scheduled_changes=True, history=True, versioned=True)
 
             def getPotentialRequiredSignoffs(self, affected_rows, transaction=None):
@@ -955,11 +958,12 @@ class TestScheduledChangesTable(unittest.TestCase, ScheduledChangesTableMixin, M
     @mock.patch("time.time", mock.MagicMock(return_value=200))
     def testInsertWithNonAutoincrement(self):
         class TestTable2(AUSTable):
-
             def __init__(self, db, metadata):
                 self.table = Table("test_table2", metadata, Column("foo_name", String(15), primary_key=True),
                                    Column("foo", String(15)),
                                    Column("bar", String(15)))
+                self.permissionName = 'N/A'
+                self.productField = None
                 super(TestTable2, self).__init__(db, "sqlite", scheduled_changes=True, history=True, versioned=True)
 
             def getPotentialRequiredSignoffs(self, *args, **kwargs):
@@ -989,7 +993,10 @@ class TestScheduledChangesTable(unittest.TestCase, ScheduledChangesTableMixin, M
                                    Column('foo_id', Integer, primary_key=True),
                                    Column('bar', String(15), primary_key=True, nullable=False),
                                    Column('baz', String(15)))
+                self.permissionName = 'N/A'
+                self.productField = None
                 super(TestTable, self).__init__(db, 'sqlite', scheduled_changes=True, history=False, versioned=True)
+
         table = TestTable(self.db, self.metadata)
         self.metadata.create_all()
         table_sc = table.scheduled_changes
@@ -1011,6 +1018,8 @@ class TestScheduledChangesTable(unittest.TestCase, ScheduledChangesTableMixin, M
                 self.table = Table("test_table2", metadata, Column("fooid", Integer, primary_key=True),
                                    Column("foo", String(15), primary_key=True),
                                    Column("bar", String(15)))
+                self.permissionName = 'N/A'
+                self.productField = None
                 super(TestTable2, self).__init__(db, "sqlite", scheduled_changes=True, history=True, versioned=True)
 
             def getPotentialRequiredSignoffs(self, *args, **kwargs):
@@ -1073,6 +1082,8 @@ class TestScheduledChangesTable(unittest.TestCase, ScheduledChangesTableMixin, M
                                    Column("fooid", Integer, primary_key=True),
                                    Column("foo", String(15), primary_key=True),
                                    Column("bar", String(15)))
+                self.permissionName = 'N/A'
+                self.productField = None
                 super(TestTable2, self).__init__(db, "sqlite", scheduled_changes=True, history=True, versioned=True)
 
             def getPotentialRequiredSignoffs(self, *args, **kwargs):
@@ -1459,6 +1470,8 @@ class TestScheduledChangesWithConfigurableConditions(unittest.TestCase, MemoryDa
                 self.table = Table("test_table", metadata, Column("fooid", Integer, primary_key=True, autoincrement=True),
                                    Column("foo", String(15), nullable=False),
                                    Column("bar", String(15)))
+                self.permissionName = 'N/A'
+                self.productField = None
                 super(TestTable, self).__init__(db, "sqlite", scheduled_changes=True, scheduled_changes_kwargs={"conditions": ["time"]},
                                                 history=True, versioned=True)
 
@@ -1519,6 +1532,8 @@ class TestScheduledChangesWithConfigurableConditions(unittest.TestCase, MemoryDa
                 self.table = Table("test_table3", metadata, Column("fooid", Integer, primary_key=True, autoincrement=True),
                                    Column("foo", String(15), nullable=False),
                                    Column("bar", String(15)))
+                self.permissionName = 'N/A'
+                self.productField = None
                 super(TestTable2, self).__init__(db, "sqlite", scheduled_changes=True, scheduled_changes_kwargs={"conditions": []},
                                                  history=True, versioned=True)
 
@@ -1534,6 +1549,8 @@ class TestScheduledChangesWithConfigurableConditions(unittest.TestCase, MemoryDa
                 self.table = Table("test_table3", metadata, Column("fooid", Integer, primary_key=True, autoincrement=True),
                                    Column("foo", String(15), nullable=False),
                                    Column("bar", String(15)))
+                self.permissionName = 'N/A'
+                self.productField = None
                 super(TestTable3, self).__init__(db, "sqlite", scheduled_changes=True, scheduled_changes_kwargs={"conditions": ["time", "blech"]},
                                                  history=True, versioned=True)
 
@@ -1615,7 +1632,7 @@ class TestScheduledChangesWithConfigurableConditions(unittest.TestCase, MemoryDa
 
 
 @pytest.mark.usefixtures("current_db_schema")
-class TestSignoffsTable(unittest.TestCase, MemoryDatabaseMixin):
+class TestPermissionsSignoffsTable(unittest.TestCase, MemoryDatabaseMixin):
 
     def setUp(self):
         MemoryDatabaseMixin.setUp(self)
@@ -1623,15 +1640,46 @@ class TestSignoffsTable(unittest.TestCase, MemoryDatabaseMixin):
         self.metadata.create_all(self.db.engine)
         self.engine = self.db.engine
         self.metadata = self.db.metadata
-        self.signoffs = SignoffsTable(self.db, self.metadata, "sqlite", "test_table")
+        self.signoffs = self.db.permissions.scheduled_changes.signoffs
         self.metadata.create_all()
-        self.db.permissions.user_roles.t.insert().execute(username="bob", role="releng", data_version=1)
-        self.db.permissions.user_roles.t.insert().execute(username="bob", role="dev", data_version=1)
-        self.db.permissions.user_roles.t.insert().execute(username="nancy", role="relman", data_version=1)
-        self.db.permissions.user_roles.t.insert().execute(username="nancy", role="qa", data_version=1)
-        self.db.permissions.user_roles.t.insert().execute(username="janet", role="relman", data_version=1)
-        self.db.permissions.t.insert().execute(permission="admin", username="charlie", data_version=1)
-        self.signoffs.t.insert().execute(sc_id=1, username="nancy", role="relman")
+        # full admin
+        self.db.permissions.t.insert().execute(username="bob", permission="admin", data_version=1)
+        self.db.permissions.t.insert().execute(username="brian", permission="admin", data_version=1)
+        self.db.permissions.t.insert().execute(username="bruce", permission="admin", data_version=1)
+        # product admins
+        self.db.permissions.t.insert().execute(username="derek", permission="admin", options={"products": ["foo"]}, data_version=1)
+        self.db.permissions.t.insert().execute(username="dale", permission="admin", options={"products": ["foo", "baz"]}, data_version=1)
+        self.db.permissions.t.insert().execute(username="david", permission="admin", options={"products": ["bar"]}, data_version=1)
+        # all-actions permission
+        self.db.permissions.t.insert().execute(username="fred", permission="permission", data_version=1)
+        # specific-action permission
+        self.db.permissions.t.insert().execute(username="eric", permission="permission", options={"actions": ["signoff"]}, data_version=1)
+        self.db.permissions.t.insert().execute(username="evan", permission="permission", options={"actions": ["create"]}, data_version=1)
+        # roles for everyone
+        for user in ("bob", "brian", "derek", "dale", "david", "fred", "eric", "evan"):
+            self.db.permissions.user_roles.t.insert().execute(username=user, role="releng", data_version=1)
+        self.db.permissions.user_roles.t.insert().execute(username="bob", role="relman", data_version=1)
+        # signoff requirements
+        self.db.permissionsRequiredSignoffs.t.insert().execute(product="foo", role="releng", signoffs_required=1, data_version=1)
+        self.db.permissionsRequiredSignoffs.t.insert().execute(product="foo", role="relman", signoffs_required=1, data_version=1)
+        # scheduled changes
+        # full admin
+        self.db.permissions.scheduled_changes.t.insert().execute(sc_id=1, scheduled_by="bob", complete=False, change_type="insert", data_version=1,
+                                                                 base_permission="admin", base_username="gary", base_data_version=1)
+        self.db.permissions.scheduled_changes.conditions.t.insert().execute(sc_id=1, when=300000, data_version=1)
+        # product admin
+        self.db.permissions.scheduled_changes.t.insert().execute(sc_id=2, scheduled_by="bob", complete=False, change_type="insert", data_version=1,
+                                                                 base_permission="admin", base_username="gary", base_options={"products": ["foo"]},
+                                                                 base_data_version=1)
+        self.db.permissions.scheduled_changes.conditions.t.insert().execute(sc_id=2, when=300000, data_version=1)
+        # for revocation tests
+        self.db.permissions.scheduled_changes.t.insert().execute(sc_id=4, scheduled_by="bob", complete=False, change_type="insert", data_version=1,
+                                                                 base_permission="admin", base_username="gary", base_options={"products": ["foo"]},
+                                                                 base_data_version=1)
+        self.db.permissions.scheduled_changes.conditions.t.insert().execute(sc_id=4, when=300000, data_version=1)
+        for user in ("bob", "derek", "dale", "fred", "eric"):
+            self.signoffs.t.insert().execute(sc_id=4, username=user, role="releng")
+        self.signoffs.t.insert().execute(sc_id=4, username="bruce", role="relman")
 
     def testSignoffsHasCorrectTablesAndColumns(self):
         columns = [c.name for c in self.signoffs.t.get_children()]
@@ -1641,47 +1689,89 @@ class TestSignoffsTable(unittest.TestCase, MemoryDatabaseMixin):
         expected = ["change_id", "changed_by", "timestamp"] + expected
         self.assertEqual(set(history_columns), set(expected))
 
-    def testSignoffWithPermission(self):
-        self.signoffs.insert("bob", sc_id=1, username="bob", role="releng")
-        got = self.signoffs.t.select().where(self.signoffs.sc_id == 1).where(self.signoffs.username == "bob").execute().fetchall()
-        self.assertEqual(got, [(1, "bob", "releng")])
+    @parameterized.expand([
+        ("admin_full", "brian", "releng"),
+        ("permission", "fred", "releng"),
+        ("signoff_perm", "eric", "releng"),
+    ])
+    def testNoProductSignoffWithPermission(self, _, user, role):
+        self.signoffs.insert(user, sc_id=1, username=user, role=role)
+        got = self.signoffs.t.select().where(self.signoffs.sc_id == 1).where(self.signoffs.username == user).execute().fetchall()
+        self.assertEqual(got, [(1, user, role)])
 
-    def testSignoffWithoutPermission(self):
-        assertRaisesRegex(self, PermissionDeniedError, "jim cannot signoff with role 'releng'",
-                          self.signoffs.insert, "jim", sc_id=1, username="jim", role="releng")
+    @parameterized.expand([
+        ("admin_product_only", "david", "releng"),
+        ("admin_multiple_wrong_products", "dale", "releng"),
+        ("no_signoff_perm", "evan", "releng"),
+    ])
+    def testNoProductSignoffWithoutPermission(self, _, user, role):
+        assertRaisesRegex(self, PermissionDeniedError, "{} has no permission to signoff".format(user),
+                          self.signoffs.insert, user, sc_id=1, username=user, role=role)
+
+    @parameterized.expand([
+        ("admin_full", "brian", "releng"),
+        ("admin_product", "derek", "releng"),
+        ("admin_multiple_product", "dale", "releng"),
+        ("permission", "fred", "releng"),
+        ("signoff_perm", "eric", "releng"),
+    ])
+    def testWithProductSignoffWithPermission(self, _, user, role):
+        self.signoffs.insert(user, sc_id=2, username=user, role=role)
+        got = self.signoffs.t.select().where(self.signoffs.sc_id == 2).where(self.signoffs.username == user).execute().fetchall()
+        self.assertEqual(got, [(2, user, role)])
+
+    @parameterized.expand([
+        ("admin_wrong_product", "david", "releng"),
+        ("no_signoff_perm", "evan", "releng"),
+    ])
+    def testWithProductnSignoffWithoutPermission(self, _, user, role):
+        assertRaisesRegex(self, PermissionDeniedError, "{} has no permission to signoff".format(user),
+                          self.signoffs.insert, user, sc_id=2, username=user, role=role)
+
+    def testSignoffWithoutRole(self):
+        assertRaisesRegex(self, PermissionDeniedError, "bruce cannot signoff with role 'releng'",
+                          self.signoffs.insert, "bruce", sc_id=2, username="bruce", role="releng")
 
     def testSignoffASecondTimeWithSameRole(self):
-        self.signoffs.insert("nancy", sc_id=1, username="nancy", role="relman")
-        got = self.signoffs.t.select().where(self.signoffs.sc_id == 1).where(self.signoffs.username == "nancy").execute().fetchall()
-        self.assertEqual(got, [(1, "nancy", "relman")])
-        history = self.signoffs.history.t.select().where(self.signoffs.sc_id == 1).where(self.signoffs.username == "nancy").execute().fetchall()
+        self.signoffs.insert("bob", sc_id=4, username="bob", role="releng")
+        got = self.signoffs.t.select().where(self.signoffs.sc_id == 4).where(self.signoffs.username == "bob").execute().fetchall()
+        self.assertEqual(got, [(4, "bob", "releng")])
+        history = self.signoffs.history.t.select().where(self.signoffs.sc_id == 4).where(self.signoffs.username == "bob").execute().fetchall()
         self.assertEqual(len(history), 0)
 
     def testSignoffWithSecondRole(self):
         assertRaisesRegex(self, PermissionDeniedError, "Cannot signoff with a second role",
-                          self.signoffs.insert, "nancy", sc_id=1, username="nancy", role="qa")
+                          self.signoffs.insert, "bob", sc_id=4, username="bob", role="relman")
 
     def testCannotUpdateSignoff(self):
-        self.assertRaises(AttributeError, self.signoffs.update, {"username": "nancy"}, {"role": "qa"}, "nancy")
+        self.assertRaises(AttributeError, self.signoffs.update, {"username": "bob"}, {"role": "releng"}, "bob")
 
-    def testRevokeSignoff(self):
-        self.signoffs.delete({"sc_id": 1, "username": "nancy"}, changed_by="nancy")
-        got = self.signoffs.t.select().where(self.signoffs.sc_id == 1).where(self.signoffs.username == "nancy").execute().fetchall()
+    @parameterized.expand([
+        ("admin_full", "bob", "releng"),
+        ("admin_product", "derek", "releng"),
+        ("admin_multiple_product", "dale", "releng"),
+        ("permission", "fred", "releng"),
+        ("signoff_perm", "eric", "releng"),
+    ])
+    def testRevokeOwnSignoff(self, _, user, role):
+        self.signoffs.delete({"sc_id": 4, "username": user, "role": role}, changed_by=user)
+        got = self.signoffs.t.select().where(self.signoffs.sc_id == 4).where(self.signoffs.username == user).execute().fetchall()
         self.assertEqual(len(got), 0)
 
-    def testRevokeOtherUsersSignoffAsAdmin(self):
-        self.signoffs.delete({"sc_id": 1, "username": "nancy"}, changed_by="charlie")
-        got = self.signoffs.t.select().where(self.signoffs.sc_id == 1).where(self.signoffs.username == "nancy").execute().fetchall()
-        self.assertEqual(len(got), 0)
-
-    def testRevokeOtherUsersSignoffWithSameRole(self):
-        self.signoffs.delete({"sc_id": 1, "username": "nancy"}, changed_by="janet")
-        got = self.signoffs.t.select().where(self.signoffs.sc_id == 1).where(self.signoffs.username == "nancy").execute().fetchall()
+    @parameterized.expand([
+        ("admin_full", "brian", "releng"),
+        ("admin_product", "derek", "releng"),
+        ("admin_multiple_product", "dale", "releng"),
+        ("signoff_perm", "eric", "releng"),
+    ])
+    def testRevokeOtherUsersSignoffWithSameRole(self, _, user, role):
+        self.signoffs.delete({"sc_id": 4, "username": "bob", "role": role}, changed_by=user)
+        got = self.signoffs.t.select().where(self.signoffs.sc_id == 4).where(self.signoffs.username == "bob").execute().fetchall()
         self.assertEqual(len(got), 0)
 
     def testRevokeOtherUsersSignoffWithoutPermission(self):
-        assertRaisesRegex(self, PermissionDeniedError, "Cannot revoke a signoff made by someone in a group you do not belong to",
-                          self.signoffs.delete, {"sc_id": 1, "username": "nancy"}, changed_by="bob")
+        assertRaisesRegex(self, PermissionDeniedError, "Cannot revoke a signoff made by someone in a role you do not belong to",
+                          self.signoffs.delete, {"sc_id": 4, "username": "bruce", "role": "relman"}, changed_by="eric")
 
 
 @pytest.mark.usefixtures("current_db_schema")

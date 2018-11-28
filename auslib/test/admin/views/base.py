@@ -45,8 +45,9 @@ class ViewTest(unittest.TestCase):
         dbo.permissions.t.insert().execute(permission='permission', username='bob', data_version=1)
         dbo.permissions.t.insert().execute(permission='release', username='bob',
                                            options=dict(products=['fake', "a", 'b'], actions=["create", "modify"]), data_version=1)
-        dbo.permissions.t.insert().execute(permission='release', username='julie', options=dict(products=['a'], actions=["modify"]), data_version=1)
-        dbo.permissions.t.insert().execute(permission='rule', username='julie', options=dict(products=['fake'], actions=["create"]), data_version=1)
+        dbo.permissions.t.insert().execute(permission='required_signoff', username='bob', data_version=1)
+        dbo.permissions.t.insert().execute(permission='release', username='julie', options=dict(products=['a'], actions=["modify", "signoff"]), data_version=1)
+        dbo.permissions.t.insert().execute(permission='rule', username='julie', options=dict(products=['fake'], actions=["create", "signoff"]), data_version=1)
         dbo.permissions.t.insert().execute(permission='release_read_only', username='bob', options=dict(actions=["set"], products=["a", "b"]), data_version=1)
         dbo.permissions.t.insert().execute(permission='rule', username='bob', options=dict(actions=["modify"], products=['a', "b"]), data_version=1)
         dbo.permissions.t.insert().execute(permission='release', username='ashanti', options=dict(actions=["modify"], products=['a']), data_version=1)

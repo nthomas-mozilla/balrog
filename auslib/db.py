@@ -991,7 +991,7 @@ class ScheduledChangeTable(AUSTable):
         self.conditions = ConditionsTable(db, dialect, metadata, table_name, conditions, history=history)
         # Signoffs are configurable at runtime, which means that we always need
         # a Signoffs table, even if it may not be used immediately.
-        self.signoffs = SignoffsTable(db, metadata, dialect, table_name)
+        self.signoffs = SignoffsTable(db, metadata, dialect, self, baseTable.permissionName, baseTable.productField)
 
         # The primary key column(s) are used in construct "where" clauses for
         # existing rows.
@@ -1140,7 +1140,7 @@ class ScheduledChangeTable(AUSTable):
 
     def auto_signoff(self, changed_by, transaction, sc_id, dryrun, columns):
         # - If the User scheduling a change only holds one of the required Roles, record a signoff with it.
-        # - If the User scheduling a change holds more than one of the required Roles, we cannot a Signoff, because
+        # - If the User scheduling a change holds more than one of the required Roles then we cannot add a Signoff, because
         #   we don't know which Role we'd want to signoff with. The user will need to signoff
         #   manually in these cases.
         user_roles = self.db.getUserRoles(username=changed_by, transaction=transaction)
@@ -1452,6 +1452,8 @@ class ProductRequiredSignoffsTable(RequiredSignoffsTable):
                            Column("product", String(15), primary_key=True),
                            Column("channel", String(75), primary_key=True),
                            )
+        self.permissionName = 'required_signoff'
+        self.productField = 'base_product'
         super(ProductRequiredSignoffsTable, self).__init__(db, dialect)
 
 
@@ -1463,20 +1465,42 @@ class PermissionsRequiredSignoffsTable(RequiredSignoffsTable):
         self.table = Table("permissions_req_signoffs", metadata,
                            Column("product", String(15), primary_key=True),
                            )
+        self.permissionName = 'required_signoff'
+        self.productField = 'base_product'
         super(PermissionsRequiredSignoffsTable, self).__init__(db, dialect)
 
 
 class SignoffsTable(AUSTable):
 
-    def __init__(self, db, metadata, dialect, baseName):
-        self.table = Table("{}_signoffs".format(baseName), metadata,
+    def __init__(self, db, metadata, dialect, baseTable, permissionName, productField=None):
+        self.table = Table("{}_signoffs".format(baseTable.table.name), metadata,
                            Column("sc_id", Integer, primary_key=True, autoincrement=False),
                            Column("username", String(100), primary_key=True),
                            Column("role", String(50), nullable=False),
                            )
+        self.baseTable = baseTable
+        # table and permissions names don't line up and we need to know how to look up permissions for signoffs
+        self.permissionName = permissionName
+        # we also need to know what field in the ScheduledChanges table to find product in
+        self.productField = productField
         # Because Signoffs cannot be modified, there's no possibility of an
         # update race, so they do not need to be versioned.
         super(SignoffsTable, self).__init__(db, dialect, versioned=False)
+
+    def hasSignoffPermission(self, sc_id, changed_by, transaction=None):
+        if self.productField:
+            sc = self.baseTable.select(where=[self.baseTable.sc_id == sc_id])[0]
+            products = sc.get(self.productField)
+            # the permissions table stores products in base_options['products']
+            if isinstance(products, dict) and isinstance(products.get("products"), list):
+
+                return any([self.db.hasPermission(changed_by, self.permissionName, "signoff", product=p, transaction=transaction) for
+                            p in products["products"]])
+            # the single or no product case
+            else:
+                return self.db.hasPermission(changed_by, self.permissionName, "signoff", product=products, transaction=transaction)
+        else:
+            return self.db.hasPermission(changed_by, self.permissionName, "signoff", product=None, transaction=transaction)
 
     def insert(self, changed_by=None, transaction=None, dryrun=False, **columns):
         if "sc_id" not in columns or "role" not in columns:
@@ -1485,10 +1509,12 @@ class SignoffsTable(AUSTable):
             raise PermissionDeniedError("Cannot signoff on behalf of another user")
         if not self.db.hasRole(changed_by, columns["role"], transaction=transaction):
             raise PermissionDeniedError("{} cannot signoff with role '{}'".format(changed_by, columns["role"]))
+        if not self.hasSignoffPermission(columns["sc_id"], changed_by):
+            raise PermissionDeniedError("{} has no permission to signoff".format(changed_by))
 
         existing_signoff = self.select({"sc_id": columns["sc_id"], "username": changed_by}, transaction)
         if existing_signoff:
-            # It shouldn't be possible for there to be more than one signoff,
+            # It shouldn't be possible for there to be more than one signoff per user,
             # so not iterating over this should be fine.
             existing_signoff = existing_signoff[0]
             if existing_signoff["role"] != columns["role"]:
@@ -1507,7 +1533,9 @@ class SignoffsTable(AUSTable):
         if not reset_signoff:
             for row in self.select(where, transaction):
                 if not self.db.hasRole(changed_by, row["role"], transaction=transaction) and not self.db.isAdmin(changed_by, transaction=transaction):
-                    raise PermissionDeniedError("Cannot revoke a signoff made by someone in a group you do not belong to")
+                    raise PermissionDeniedError("Cannot revoke a signoff made by someone in a role you do not belong to")
+                if not self.hasSignoffPermission(row["sc_id"], changed_by):
+                    raise PermissionDeniedError("{} has no permission to revoke signoff".format(changed_by))
 
         super(SignoffsTable, self).delete(where, changed_by=changed_by, transaction=transaction, dryrun=dryrun)
 
@@ -1539,7 +1567,8 @@ class Rules(AUSTable):
                            Column('headerArchitecture', String(10)),
                            Column('comment', String(500)),
                            )
-
+        self.permissionName = 'rule'
+        self.productField = 'base_product'
         AUSTable.__init__(self, db, dialect, scheduled_changes=True)
 
     def getPotentialRequiredSignoffs(self, affected_rows, transaction=None):
@@ -1766,6 +1795,8 @@ class Releases(AUSTable):
         else:
             dataType = Text
         self.table.append_column(Column('data', BlobColumn(dataType), nullable=False))
+        self.permissionName = 'release'
+        self.productField = 'base_product'
         AUSTable.__init__(self, db, dialect, scheduled_changes=True, scheduled_changes_kwargs={"conditions": ["time"]})
 
     def getPotentialRequiredSignoffs(self, affected_rows, transaction=None):
@@ -2169,6 +2200,8 @@ class Permissions(AUSTable):
                            Column('options', JSONColumn)
                            )
         self.user_roles = UserRoles(db, metadata, dialect)
+        self.permissionName = 'permission'
+        self.productField = 'base_options'
         AUSTable.__init__(self, db, dialect, scheduled_changes=True, scheduled_changes_kwargs={"conditions": ["time"]})
 
     def getPotentialRequiredSignoffs(self, affected_rows, transaction=None):
@@ -2339,9 +2372,9 @@ class Permissions(AUSTable):
         return bool(self.getPermission(username, "admin", transaction))
 
     def hasPermission(self, username, thing, action, product=None, transaction=None):
-        perm = self.getPermission(username, "admin", transaction=transaction)
-        if perm:
-            options = perm["options"]
+        admin_perm = self.getPermission(username, "admin", transaction=transaction)
+        if admin_perm:
+            options = admin_perm["options"]
             if options and options.get("products") and product not in options["products"]:
                 # Supporting product-wise admin permissions. If there are no options
                 # with admin, we assume that the user has admin access over all
@@ -2416,6 +2449,9 @@ class EmergencyShutoffs(AUSTable):
         self.table = Table('emergency_shutoffs', metadata,
                            Column('product', String(15), nullable=False, primary_key=True),
                            Column('channel', String(75), nullable=False, primary_key=True))
+        # XXX really ?
+        self.permissionName = "emergency_shutoff"
+        self.productField = "base_product"
         AUSTable.__init__(self, db, dialect, scheduled_changes=True, scheduled_changes_kwargs={"conditions": ["time"]})
 
     def insert(self, changed_by, transaction=None, dryrun=False, **columns):
